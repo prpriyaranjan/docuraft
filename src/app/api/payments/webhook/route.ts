@@ -25,7 +25,6 @@ export async function POST(request: Request) {
     const payload = JSON.parse(bodyText);
 
     // Handle payment captured events (simple scaffold)
-    const event = payload?.event || payload?.event_type || payload?.eventType || "";
     const data = payload?.payload ?? payload?.data ?? payload;
 
     // Attempt to extract payment/order ids
@@ -48,7 +47,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
+  } catch (error) {
+    console.error(error);
     return NextResponse.json({ error: "Webhook handling failed" }, { status: 500 });
   }
 }
