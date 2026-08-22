@@ -95,55 +95,79 @@ export function PaymentFlow({
     setStatus("processing");
 
     try {
-      const nextPaymentId = `upi_${Date.now()}`;
-      setPaymentId(nextPaymentId);
-
-      window.location.href = upiLink;
-
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      const response = await fetch("/api/payments", {
+      // Create a Razorpay order on the server and open the Checkout widget.
+      const orderResp = await fetch("/api/payments/razorpay", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${userToken}`,
         },
-        body: JSON.stringify({
-          templateId,
-          amount,
-          paymentId: nextPaymentId,
-        }),
+        body: JSON.stringify({ amount, receipt: `rcpt_${templateId}_${Date.now()}` }),
       });
 
-      if (!response.ok) {
-        throw new Error("Payment verification failed");
-      }
+      if (!orderResp.ok) throw new Error("Failed to create payment order");
+      const orderJson = await orderResp.json();
+      const order = orderJson?.order;
 
-      const result = await response.json();
+      if (!order || !order.id) throw new Error("Invalid order from server");
 
-      if (result?.verified) {
-        const orderResponse = await fetch("/api/orders", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${userToken}`,
-          },
-          body: JSON.stringify({
-            templateId,
-            amount,
-            paymentId: result.paymentId,
-            status: "paid",
-          }),
-        });
+      // Load Razorpay checkout script
+      await new Promise<void>((resolve, reject) => {
+        if ((window as any).Razorpay) return resolve();
+        const s = document.createElement("script");
+        s.src = "https://checkout.razorpay.com/v1/checkout.js";
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error("Failed to load Razorpay script"));
+        document.head.appendChild(s);
+      });
 
-        if (!orderResponse.ok) {
-          throw new Error("Order creation failed");
-        }
+      const key = (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID as string) || (window as any).__NEXT_PUBLIC_RAZORPAY_KEY_ID;
 
-        setStatus("paid");
-        onVerify({ verified: true, downloadToken: result.downloadToken });
-        router.push(`/payment/success?templateId=${templateId}&amount=${amount}`);
-      }
+      const options: any = {
+        key: key,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: "DocuCraft",
+        description: templateId,
+        order_id: order.id,
+        handler: async (response: any) => {
+          // Verify on server
+          const verifyResp = await fetch("/api/payments", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${userToken}`,
+            },
+            body: JSON.stringify({
+              templateId,
+              amount,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          });
+
+          if (!verifyResp.ok) {
+            setStatus("idle");
+            console.error("Payment verification failed");
+            return;
+          }
+
+          const verifyJson = await verifyResp.json();
+          if (verifyJson?.verified) {
+            setStatus("paid");
+            onVerify({ verified: true, downloadToken: verifyJson.downloadToken });
+            router.push(`/payment/success?templateId=${templateId}&amount=${amount}`);
+          } else {
+            setStatus("idle");
+          }
+        },
+        prefill: { email: authForm.email || undefined },
+        theme: { color: "#6366f1" },
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
     } catch (error) {
       setStatus("idle");
       console.error(error);
