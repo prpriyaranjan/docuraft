@@ -35,15 +35,20 @@ export async function POST(request: Request) {
     const orderId = razorpayPayment?.order_id ?? null;
 
     if (paymentId) {
-      // Create or update order record in the DB
-      await prisma.order.create({
-        data: {
-          paymentId: String(paymentId),
-          templateId: orderId ?? "unknown",
-          amount: Number(amount ?? 0) / 100,
-          status: "paid",
-        },
-      });
+      // Create or update order record in the DB. Make DB errors non-fatal
+      // so webhooks succeed even when the DB isn't reachable in some envs.
+      try {
+        await prisma.order.create({
+          data: {
+            paymentId: String(paymentId),
+            templateId: orderId ?? "unknown",
+            amount: Number(amount ?? 0) / 100,
+            status: "paid",
+          },
+        });
+      } catch (dbErr) {
+        console.error('Failed to persist order from webhook:', dbErr);
+      }
     }
 
     return NextResponse.json({ ok: true });
