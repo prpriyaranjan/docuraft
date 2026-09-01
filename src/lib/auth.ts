@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 
-const authSecret = process.env.AUTH_SECRET ?? "docucraft-dev-secret";
+const authSecret = process.env.AUTH_SECRET || "docucraft-dev-secret";
 
 export const AuthSchema = z.object({
   email: z.string().email(),
