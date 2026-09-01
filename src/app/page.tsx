@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { templates } from "@/data/templates";
 import { buildAuthPayload, getAuthEndpoint, type AuthMode } from "@/lib/auth-ui";
 
@@ -42,6 +42,49 @@ export default function HomePage() {
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [user, setUser] = useState<{ id: string; name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const token = typeof window !== "undefined" ? window.localStorage.getItem("docucraft-token") : null;
+        if (!token) return setUser(null);
+
+        const resp = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!resp.ok) {
+          window.localStorage.removeItem("docucraft-token");
+          return setUser(null);
+        }
+
+        const json = await resp.json();
+        setUser(json.user ?? null);
+      } catch {
+        setUser(null);
+      }
+    };
+
+    loadUser();
+
+    const handler = () => loadUser();
+    window.addEventListener("docucraft:auth-change", handler);
+    return () => window.removeEventListener("docucraft:auth-change", handler);
+  }, []);
+
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  const handleLogout = () => {
+    try {
+      window.localStorage.removeItem("docucraft-token");
+    } catch {}
+    setUser(null);
+    try {
+      window.dispatchEvent(new Event("docucraft:auth-change"));
+    } catch {}
+    setShowProfileMenu(false);
+  };
 
   const handleAuthSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -74,6 +117,22 @@ export default function HomePage() {
       window.localStorage.setItem("docucraft-token", result.token);
       setShowAuth(false);
       setAuthForm({ name: "", email: "", password: "" });
+
+      // fetch current user and update UI
+      try {
+        const meResp = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${result.token}` } });
+        if (meResp.ok) {
+          const meJson = await meResp.json();
+          setUser(meJson.user ?? null);
+        }
+      } catch {
+        // ignore
+      }
+
+      // notify other components (e.g., PaymentFlow) about auth change
+      try {
+        window.dispatchEvent(new Event("docucraft:auth-change"));
+      } catch {}
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Authentication failed");
     } finally {
@@ -101,16 +160,41 @@ export default function HomePage() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAuth(true)}
-              className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 sm:inline-flex"
-            >
-              Log in
-            </button>
-            <button className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-500">
+            {user ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileMenu((s) => !s)}
+                  className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 sm:inline-flex"
+                >
+                  {user.name}
+                </button>
+                {showProfileMenu ? (
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white shadow-lg">
+                    <div className="flex flex-col p-2">
+                      <Link href="/my-documents" className="rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                        My documents
+                      </Link>
+                      <button onClick={handleLogout} className="mt-1 rounded px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 text-left">
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAuth(true)}
+                className="hidden rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 sm:inline-flex"
+              >
+                Log in
+              </button>
+            )}
+
+            <Link href="/editor/resume-modern-001" className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-200 transition hover:bg-indigo-500">
               Create Resume
-            </button>
+            </Link>
           </div>
         </div>
       </header>

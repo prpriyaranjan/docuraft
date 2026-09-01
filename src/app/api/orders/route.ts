@@ -24,6 +24,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = OrderSchema.parse(body);
 
+    const DB_URL = process.env.DATABASE_URL ?? "";
+
+    // If no DB is configured (preview/dev), return a transient order object
+    // instead of failing. If DB is present, persist as before.
+    if (!DB_URL) {
+      const order = {
+        id: `dev_order_${Date.now()}`,
+        userId: payload.userId,
+        templateId: parsed.templateId,
+        amount: parsed.amount,
+        paymentId: parsed.paymentId ?? `dev_payment_${Date.now()}`,
+        documentId: parsed.documentId ?? null,
+        status: "paid",
+      };
+
+      return NextResponse.json(order, { status: 201 });
+    }
+
     const order = await prisma.order.create({
       data: {
         userId: payload.userId,

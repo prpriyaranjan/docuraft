@@ -1,6 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+function BackControls() {
+  const router = useRouter();
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => router.back()}
+        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+      >
+        ← Back
+      </button>
+      <Link href="/gallery" className="text-sm text-slate-500 hover:underline">
+        Browse templates
+      </Link>
+    </div>
+  );
+}
 import { defaultTemplateData, type TemplateDefinition } from "@/data/templates";
 import { DocumentPreview } from "@/components/DocumentPreview";
 import { PaymentFlow } from "@/components/PaymentFlow";
@@ -127,9 +148,12 @@ export function DocumentEditor({ template }: { template: TemplateDefinition }) {
     <div className="grid gap-6 lg:grid-cols-[1.05fr_1.2fr]">
       <div className="space-y-6 rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm md:p-6">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Editor</p>
-            <h2 className="mt-1 text-2xl font-bold text-slate-900">{template.name}</h2>
+          <div className="flex items-center gap-4">
+            <BackControls />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Editor</p>
+              <h2 className="mt-1 text-2xl font-bold text-slate-900">{template.name}</h2>
+            </div>
           </div>
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
             {template.price === 10 ? "Premium" : "Standard"}
@@ -161,7 +185,7 @@ export function DocumentEditor({ template }: { template: TemplateDefinition }) {
               <div className="grid gap-4">
                 {groupedFields[section]?.map((field) => (
                   <label key={field.key} className="block text-sm text-slate-700">
-                    <span className="mb-1.5 block font-medium">{field.label}</span>
+                    <span className="mb-1.5 block font-medium">{field.label}:</span>
                     {field.type === "textarea" ? (
                       <textarea
                         value={data[field.key] ?? ""}
@@ -203,7 +227,7 @@ export function DocumentEditor({ template }: { template: TemplateDefinition }) {
             </button>
           </div>
 
-          <DocumentPreview template={template} data={data} />
+          <DocumentPreview template={template} data={data} showSectionTitles={false} showFieldLabels={false} />
         </div>
       </div>
 

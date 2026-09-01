@@ -17,13 +17,13 @@ export function PaymentFlow({
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "processing" | "verified" | "paid">("idle");
-  const [paymentId, setPaymentId] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
   const [token, setToken] = useState<string | null>(null);
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? window.localStorage.getItem("docucraft-token") : null;
@@ -61,6 +61,9 @@ export function PaymentFlow({
   const persistToken = (nextToken: string) => {
     window.localStorage.setItem("docucraft-token", nextToken);
     setToken(nextToken);
+    try {
+      window.dispatchEvent(new Event("docucraft:auth-change"));
+    } catch {}
   };
 
   const authenticateUser = async () => {
@@ -113,7 +116,7 @@ export function PaymentFlow({
 
       // Load Razorpay checkout script
       await new Promise<void>((resolve, reject) => {
-        if ((window as any).Razorpay) return resolve();
+        if ((window as { Razorpay?: unknown }).Razorpay) return resolve();
         const s = document.createElement("script");
         s.src = "https://checkout.razorpay.com/v1/checkout.js";
         s.onload = () => resolve();
@@ -121,16 +124,40 @@ export function PaymentFlow({
         document.head.appendChild(s);
       });
 
-      const key = (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID as string) || (window as any).__NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      const key = ((process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID as string) || (window as { __NEXT_PUBLIC_RAZORPAY_KEY_ID?: string }).__NEXT_PUBLIC_RAZORPAY_KEY_ID) ?? "";
 
-      const options: any = {
+      if (!key) {
+        console.error("Razorpay key not configured");
+        setStatus("idle");
+        return;
+      }
+
+      interface RazorpayOptions {
+        key: string;
+        amount: number;
+        currency: string;
+        name: string;
+        description: string;
+        order_id: string;
+        handler: (response: RazorpayResponse) => Promise<void>;
+        prefill?: { email?: string };
+        theme?: { color: string };
+      }
+
+      interface RazorpayResponse {
+        razorpay_payment_id: string;
+        razorpay_order_id: string;
+        razorpay_signature: string;
+      }
+
+      const options: RazorpayOptions = {
         key: key,
         amount: order.amount,
         currency: order.currency || "INR",
         name: "DocuCraft",
         description: templateId,
         order_id: order.id,
-        handler: async (response: any) => {
+        handler: async (response: RazorpayResponse) => {
           // Verify on server
           const verifyResp = await fetch("/api/payments", {
             method: "POST",
@@ -166,8 +193,11 @@ export function PaymentFlow({
         theme: { color: "#6366f1" },
       };
 
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
+      const RazorpayConstructor = (window as { Razorpay?: new (options: RazorpayOptions) => { open: () => void } }).Razorpay;
+      if (RazorpayConstructor) {
+        const rzp = new RazorpayConstructor(options);
+        rzp.open();
+      }
     } catch (error) {
       setStatus("idle");
       console.error(error);
@@ -226,14 +256,69 @@ export function PaymentFlow({
         </div>
       </div>
 
-      <a
-        href={upiLink}
-        target="_blank"
-        rel="noreferrer"
+      <button
+        type="button"
+        onClick={() => {
+          try {
+            // Try opening UPI scheme in the same tab (avoids creating a blank new tab)
+            window.location.href = upiLink;
+          } catch {
+            // Fallback: open in same window
+            window.open(upiLink, "_self");
+          }
+
+          // Show fallback instructions in case no app opened
+          try {
+            setShowFallback(true);
+            window.setTimeout(() => setShowFallback(false), 6000);
+          } catch {}
+        }}
         className="mb-3 inline-flex w-full items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
       >
         Open UPI app to pay ₹{amount}
-      </a>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          try {
+            router.push("/");
+          } catch {
+            window.location.href = "/";
+          }
+        }}
+        className="mb-3 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+      >
+        Return to homepage
+      </button>
+
+      {showFallback ? (
+        <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          <div className="mb-2">If your UPI app did not open, try scanning the QR code above or copy the UPI ID below.</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCopyUpiId}
+              className="rounded-full border border-yellow-200 bg-white px-3 py-1 text-sm font-semibold text-yellow-800"
+            >
+              {copyState === "copied" ? "Copied" : "Copy UPI ID"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  // scroll QR into view if available
+                  const img = document.querySelector('img[alt="UPI QR code"]');
+                  if (img) (img as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+                } catch {}
+              }}
+              className="rounded-full border border-yellow-200 bg-white px-3 py-1 text-sm font-semibold text-yellow-800"
+            >
+              Show QR
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"
@@ -247,10 +332,6 @@ export function PaymentFlow({
             ? "Verified"
             : `Confirm payment of ₹${amount}`}
       </button>
-
-      {paymentId ? (
-        <div className="mt-3 text-center text-[11px] text-slate-500">Reference: {paymentId}</div>
-      ) : null}
 
       {showAuth ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
