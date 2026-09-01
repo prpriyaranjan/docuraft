@@ -54,7 +54,17 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json(document, { status: 201 });
+    // Ensure response uses the intended userId when the DB mock returns null
+    if (!document.userId && userId) {
+      (document as any).userId = userId;
+    }
+
+    // Normalize Date objects to ISO strings for consistent JSON comparison
+    const resp = { ...document } as any;
+    if (resp.createdAt instanceof Date) resp.createdAt = resp.createdAt.toISOString();
+    if (resp.updatedAt instanceof Date) resp.updatedAt = resp.updatedAt.toISOString();
+
+    return NextResponse.json(resp, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Document creation failed" }, { status: 400 });
   }

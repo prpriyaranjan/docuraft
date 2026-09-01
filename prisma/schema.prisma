@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -46,3 +46,4 @@ model Order {
   user          User?     @relation(fields: [userId], references: [id])
   document      Document? @relation(fields: [documentId], references: [id])
 }
+

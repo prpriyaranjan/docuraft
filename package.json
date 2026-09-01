@@ -5,11 +5,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test src/lib/*.test.ts",
+    "test": "tsx --test src/lib/*.test.ts && vitest run src/app/api/**/*.test.ts src/components/*.test.tsx",
     "e2e": "playwright test",
-    "db:push": "prisma db push"
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:setup:dev": "bash scripts/db-setup.sh dev",
+    "db:setup:prod": "bash scripts/db-setup.sh prod"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -24,6 +30,9 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/react": "^14.0.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20",
@@ -31,10 +40,12 @@
     "@types/react-dom": "^18",
     "eslint": "^8",
     "eslint-config-next": "14.2.15",
+    "jsdom": "^24.0.0",
+    "playwright": "^1.44.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
-    "playwright": "^1.44.0",
-    "@playwright/test": "^1.44.0"
+    "vitest": "^1.0.0"
   }
 }
+

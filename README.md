@@ -72,6 +72,9 @@ Deployment
 Razorpay integration
 - A server-side scaffold is provided at `src/lib/razorpay.ts` and an API route at `src/app/api/payments/razorpay/route.ts` that creates an order using your Razorpay keys. You must set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in the environment for it to work.
 
+Webhooks
+- A webhook endpoint scaffold is available at `src/app/api/payments/webhook/route.ts` that verifies the `x-razorpay-signature` header and creates a simple order record. Configure your Razorpay webhook URL to point to `/api/payments/webhook` and set `RAZORPAY_KEY_SECRET` in environment variables (the same secret used for API requests).
+
 End-to-end tests
 - Playwright tests live in the `e2e/` folder. Run them locally after starting the dev server:
 
