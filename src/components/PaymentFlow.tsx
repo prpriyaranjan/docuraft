@@ -23,6 +23,7 @@ export function PaymentFlow({
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
   const [token, setToken] = useState<string | null>(null);
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
     const saved = typeof window !== "undefined" ? window.localStorage.getItem("docucraft-token") : null;
@@ -255,14 +256,69 @@ export function PaymentFlow({
         </div>
       </div>
 
-      <a
-        href={upiLink}
-        target="_blank"
-        rel="noreferrer"
+      <button
+        type="button"
+        onClick={() => {
+          try {
+            // Try opening UPI scheme in the same tab (avoids creating a blank new tab)
+            window.location.href = upiLink;
+          } catch {
+            // Fallback: open in same window
+            window.open(upiLink, "_self");
+          }
+
+          // Show fallback instructions in case no app opened
+          try {
+            setShowFallback(true);
+            window.setTimeout(() => setShowFallback(false), 6000);
+          } catch {}
+        }}
         className="mb-3 inline-flex w-full items-center justify-center rounded-full bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500"
       >
         Open UPI app to pay ₹{amount}
-      </a>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          try {
+            router.push("/");
+          } catch {
+            window.location.href = "/";
+          }
+        }}
+        className="mb-3 inline-flex w-full items-center justify-center rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+      >
+        Return to homepage
+      </button>
+
+      {showFallback ? (
+        <div className="mt-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          <div className="mb-2">If your UPI app did not open, try scanning the QR code above or copy the UPI ID below.</div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCopyUpiId}
+              className="rounded-full border border-yellow-200 bg-white px-3 py-1 text-sm font-semibold text-yellow-800"
+            >
+              {copyState === "copied" ? "Copied" : "Copy UPI ID"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  // scroll QR into view if available
+                  const img = document.querySelector('img[alt="UPI QR code"]');
+                  if (img) (img as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+                } catch {}
+              }}
+              className="rounded-full border border-yellow-200 bg-white px-3 py-1 text-sm font-semibold text-yellow-800"
+            >
+              Show QR
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"
