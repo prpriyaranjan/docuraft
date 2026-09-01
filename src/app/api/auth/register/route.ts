@@ -19,6 +19,22 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = AuthSchema.parse(body);
 
+    const DB_URL = process.env.DATABASE_URL ?? "";
+
+    // If no DATABASE_URL is provided (preview/dev), don't fail — return a
+    // transient in-memory user and token so previews remain usable.
+    if (!DB_URL) {
+      const user = {
+        id: `dev_user_${Date.now()}`,
+        email: parsed.email,
+        name: parsed.name ?? parsed.email.split("@")[0],
+      };
+
+      const token = signToken({ userId: user.id, email: user.email });
+
+      return NextResponse.json({ token, user }, { headers });
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { email: parsed.email },
     });

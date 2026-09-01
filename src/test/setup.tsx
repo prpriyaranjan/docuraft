@@ -13,9 +13,15 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-// Mock Next.js Image
+// Mock Next.js Image - render a lightweight placeholder to avoid <img> usage in build
 vi.mock("next/image", () => ({
-  default: ({ src, alt, ...props }: React.ComponentProps<"img">) => <img src={src} alt={alt} {...props} />,
+  default: ({ alt, ...props }: { alt?: string }) => (
+    <div
+      role="img"
+      aria-label={alt}
+      {...(props as any)}
+    />
+  ),
 }));
 
 // Mock window.matchMedia
