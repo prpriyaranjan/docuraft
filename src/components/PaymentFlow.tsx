@@ -17,7 +17,6 @@ export function PaymentFlow({
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "processing" | "verified" | "paid">("idle");
-  const [paymentId, setPaymentId] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
@@ -61,6 +60,9 @@ export function PaymentFlow({
   const persistToken = (nextToken: string) => {
     window.localStorage.setItem("docucraft-token", nextToken);
     setToken(nextToken);
+    try {
+      window.dispatchEvent(new Event("docucraft:auth-change"));
+    } catch {}
   };
 
   const authenticateUser = async () => {
@@ -113,7 +115,7 @@ export function PaymentFlow({
 
       // Load Razorpay checkout script
       await new Promise<void>((resolve, reject) => {
-        if ((window as any).Razorpay) return resolve();
+        if ((window as { Razorpay?: unknown }).Razorpay) return resolve();
         const s = document.createElement("script");
         s.src = "https://checkout.razorpay.com/v1/checkout.js";
         s.onload = () => resolve();
@@ -121,16 +123,40 @@ export function PaymentFlow({
         document.head.appendChild(s);
       });
 
-      const key = (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID as string) || (window as any).__NEXT_PUBLIC_RAZORPAY_KEY_ID;
+      const key = ((process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID as string) || (window as { __NEXT_PUBLIC_RAZORPAY_KEY_ID?: string }).__NEXT_PUBLIC_RAZORPAY_KEY_ID) ?? "";
 
-      const options: any = {
+      if (!key) {
+        console.error("Razorpay key not configured");
+        setStatus("idle");
+        return;
+      }
+
+      interface RazorpayOptions {
+        key: string;
+        amount: number;
+        currency: string;
+        name: string;
+        description: string;
+        order_id: string;
+        handler: (response: RazorpayResponse) => Promise<void>;
+        prefill?: { email?: string };
+        theme?: { color: string };
+      }
+
+      interface RazorpayResponse {
+        razorpay_payment_id: string;
+        razorpay_order_id: string;
+        razorpay_signature: string;
+      }
+
+      const options: RazorpayOptions = {
         key: key,
         amount: order.amount,
         currency: order.currency || "INR",
         name: "DocuCraft",
         description: templateId,
         order_id: order.id,
-        handler: async (response: any) => {
+        handler: async (response: RazorpayResponse) => {
           // Verify on server
           const verifyResp = await fetch("/api/payments", {
             method: "POST",
@@ -166,8 +192,11 @@ export function PaymentFlow({
         theme: { color: "#6366f1" },
       };
 
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
+      const RazorpayConstructor = (window as { Razorpay?: new (options: RazorpayOptions) => { open: () => void } }).Razorpay;
+      if (RazorpayConstructor) {
+        const rzp = new RazorpayConstructor(options);
+        rzp.open();
+      }
     } catch (error) {
       setStatus("idle");
       console.error(error);
@@ -247,10 +276,6 @@ export function PaymentFlow({
             ? "Verified"
             : `Confirm payment of ₹${amount}`}
       </button>
-
-      {paymentId ? (
-        <div className="mt-3 text-center text-[11px] text-slate-500">Reference: {paymentId}</div>
-      ) : null}
 
       {showAuth ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4">
