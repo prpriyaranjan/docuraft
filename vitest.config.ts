@@ -7,9 +7,7 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.tsx"],
     include: ["src/**/*.test.{ts,tsx}"],
     globals: true,
-    deps: {
-      inline: ["@vitejs/plugin-react"],
-    },
+    deps: {},
   },
   resolve: {
     alias: {
