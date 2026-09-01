@@ -25,7 +25,8 @@ export async function POST(request: Request) {
     const order = await createRazorpayOrder(Math.round(amount * 100), receipt);
 
     return NextResponse.json({ ok: true, order }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? "Razorpay order failed" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err ?? "Razorpay order failed");
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
