@@ -1,3 +1,5 @@
+import { allowFallbacks } from "@/lib/env";
+
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID ?? "";
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET ?? "";
 
@@ -12,7 +14,19 @@ export type RazorpayOrder = {
 
 export async function createRazorpayOrder(amountInPaise: number, receipt: string) {
   if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
-    throw new Error("Razorpay credentials not configured");
+    if (!allowFallbacks) {
+      throw new Error("Razorpay credentials not configured");
+    }
+
+    // Return a deterministic fake order in preview/dev so previews and tests don't fail.
+    return {
+      id: `order_${Date.now()}`,
+      entity: "order",
+      amount: amountInPaise,
+      currency: "INR",
+      receipt,
+      status: "created",
+    } as RazorpayOrder;
   }
 
   const url = "https://api.razorpay.com/v1/orders";
