@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { templates } from "@/data/templates";
 import { buildAuthPayload, getAuthEndpoint, type AuthMode } from "@/lib/auth-ui";
+import { useRouter } from "next/navigation";
 
 const categories = [
   "Resume",
@@ -41,6 +42,8 @@ export default function HomePage() {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleAuthSubmit = async (event: React.FormEvent) => {
@@ -74,6 +77,12 @@ export default function HomePage() {
       window.localStorage.setItem("docucraft-token", result.token);
       setShowAuth(false);
       setAuthForm({ name: "", email: "", password: "" });
+      setAuthSuccess(authMode === "register" ? "Account created successfully" : "Logged in successfully");
+      try {
+        router.refresh();
+      } catch {
+        // ignore
+      }
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Authentication failed");
     } finally {
@@ -197,6 +206,7 @@ export default function HomePage() {
               </label>
 
               {authError ? <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-sm text-red-700">{authError}</div> : null}
+              {authSuccess ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-700">{authSuccess}</div> : null}
 
               <button
                 type="submit"

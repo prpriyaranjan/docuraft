@@ -23,6 +23,7 @@ export function PaymentFlow({
   const [authMode, setAuthMode] = useState<"login" | "register">("register");
   const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
+  const [authSuccess, setAuthSuccess] = useState("");
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -88,20 +89,39 @@ export function PaymentFlow({
     persistToken(result.token);
     setShowAuth(false);
     setAuthError("");
+    setAuthSuccess(authMode === "register" ? "Account created successfully" : "Logged in successfully");
+    // Refresh next.js data so Header sees the new user immediately
+    try {
+      router.refresh();
+    } catch {
+      // ignore
+    }
     return result.token as string;
   };
 
-  const completePayment = async (userToken: string) => {
+  const completePayment = async () => {
+    // Start payment by generating an id and opening the UPI app/QR.
+    // Actual verification is performed separately by `verifyPayment`.
+    const nextPaymentId = `upi_${Date.now()}`;
+    setPaymentId(nextPaymentId);
     setStatus("processing");
 
     try {
-      const nextPaymentId = `upi_${Date.now()}`;
-      setPaymentId(nextPaymentId);
+      // Open the UPI link in a new tab/window so we don't navigate away from the app.
+      if (typeof window !== "undefined") {
+        window.open(upiLink, "_blank");
+      }
+    } catch (err) {
+      // ignore open failures; user can still copy UPI ID and use their app.
+      console.error(err);
+    }
+  };
 
-      window.location.href = upiLink;
+  const verifyPayment = async (userToken: string) => {
+    if (!paymentId) return;
+    setStatus("processing");
 
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
+    try {
       const response = await fetch("/api/payments", {
         method: "POST",
         headers: {
@@ -111,7 +131,7 @@ export function PaymentFlow({
         body: JSON.stringify({
           templateId,
           amount,
-          paymentId: nextPaymentId,
+          paymentId,
         }),
       });
 
@@ -143,21 +163,17 @@ export function PaymentFlow({
         setStatus("paid");
         onVerify({ verified: true, downloadToken: result.downloadToken });
         router.push(`/payment/success?templateId=${templateId}&amount=${amount}`);
+      } else {
+        setStatus("idle");
       }
     } catch (error) {
       setStatus("idle");
-      console.error(error);
+      console.error(error instanceof Error ? error.message : error);
+      setAuthError("Payment verification failed");
     }
   };
 
-  const handlePayment = async () => {
-    if (!token) {
-      setShowAuth(true);
-      return;
-    }
-
-    await completePayment(token);
-  };
+  // removed prior handlePayment helper; button uses inline handler now
 
   const handleAuthSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -165,8 +181,8 @@ export function PaymentFlow({
     try {
       setStatus("processing");
       setAuthError("");
-      const nextToken = await authenticateUser();
-      await completePayment(nextToken);
+      await authenticateUser();
+      await completePayment();
     } catch (error) {
       setStatus("idle");
       setAuthError(error instanceof Error ? error.message : "Authentication failed");
@@ -213,15 +229,33 @@ export function PaymentFlow({
 
       <button
         type="button"
-        onClick={handlePayment}
+        onClick={async () => {
+          if (!token) {
+            setShowAuth(true);
+            return;
+          }
+
+          // If we don't yet have a payment id, start the payment process (open UPI).
+          if (!paymentId) {
+            await completePayment();
+            return;
+          }
+
+          // If paymentId exists, attempt verification.
+          await verifyPayment(token);
+        }}
         disabled={status === "processing" || status === "paid"}
         className="w-full rounded-full bg-indigo-600 px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-400"
       >
         {status === "processing"
-          ? "Verifying payment..."
+          ? paymentId
+            ? "Verifying payment..."
+            : "Starting payment..."
           : status === "paid"
             ? "Verified"
-            : `Confirm payment of ₹${amount}`}
+            : paymentId
+              ? `Verify payment of ₹${amount}`
+              : `Confirm payment of ₹${amount}`}
       </button>
 
       {paymentId ? (
@@ -310,6 +344,7 @@ export function PaymentFlow({
               </label>
 
               {authError ? <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-sm text-red-700">{authError}</div> : null}
+              {authSuccess ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-700">{authSuccess}</div> : null}
 
               <button
                 type="submit"
